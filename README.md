@@ -10,7 +10,7 @@ Docker images for setup a mongo cluster.
 For more information about this image and its history, please see the relevant manifest file in the [`yeasy/docker-mongosetup` GitHub repo](https://github.com/yeasy/docker-mongosetup).
 
 # What is docker-mongosetup?
-Docker image with mongo installed and will run some configuration scripts. The image is built based on [Mongo 3.0](https://hub.docker.com/_/mongo/).
+Docker image with MongoDB tooling installed and startup scripts for replica-set initialization. The image is built based on [Mongo 8.2](https://hub.docker.com/_/mongo/).
 
 # How to use this image?
 The docker image is auto built at [https://registry.hub.docker.com/u/yeasy/mongosetup/](https://registry.hub.docker.com/u/yeasy/mongosetup/).
@@ -22,20 +22,20 @@ FROM yeasy/mongosetup:latest
 ```
 
 ## Local Run
-When startup, it will run the `/scripts/mongosetup.sh` to config the mongo container as a single-node cluster. Also, you can replace this with your content.
+When startup, it will connect to `${MONGO_HOST:-mongo}:${MONGO_PORT:-27017}` and initialize a single-node replica set if it is not already initialized.
 
 ```sh
-$ docker run -d --link=mongo:mongo yeasy/mongosetup
+$ docker run --rm --link=mongo:mongo yeasy/mongosetup
 ```
 
 
 # Which image is based on?
-The image is based on official `mongo:3.0`.
+The image is based on official `mongo:8.2`.
 
 # What has been changed?
 
 ## Config TZ
-Config timezone to Asia/Shanghai.
+Config timezone to UTC.
 
 ## Add customized startup command
 Add a script to setup other mongo nodes.

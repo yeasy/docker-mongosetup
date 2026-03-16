@@ -1,54 +1,36 @@
 #!/bin/bash
+set -euo pipefail
 
-MONGODB=`ping -c 1 mongo | head -1  | cut -d "(" -f 2 | cut -d ")" -f 1`
+mongo_host="${MONGO_HOST:-mongo}"
+mongo_port="${MONGO_PORT:-27017}"
+rs_name="${RS_NAME:-rs0}"
+member_host="${MEMBER_HOST:-${mongo_host}:${mongo_port}}"
 
-echo "Waiting for startup.."
-until curl http://${MONGODB}:28017/serverStatus\?text\=1 2>&1 | grep uptime | head -1; do
-  printf '.'
+auth_args=()
+if [ -n "${MONGO_USERNAME:-}" ] && [ -n "${MONGO_PASSWORD:-}" ]; then
+  auth_args=(--username "${MONGO_USERNAME}" --password "${MONGO_PASSWORD}" --authenticationDatabase "${MONGO_AUTH_DB:-admin}")
+fi
+
+echo "Waiting for MongoDB at ${mongo_host}:${mongo_port}..."
+until mongosh --quiet --host "${mongo_host}" --port "${mongo_port}" "${auth_args[@]}" --eval 'db.adminCommand({ping:1}).ok' | grep -q 1; do
   sleep 2
 done
 
-echo curl http://${MONGODB}:28017/serverStatus\?text\=1 2>&1 | grep uptime | head -1
-echo "Started.."
+echo "Checking replica set status..."
+init_result="$(mongosh --quiet --host "${mongo_host}" --port "${mongo_port}" "${auth_args[@]}" --eval "try{rs.status().ok}catch(e){e.codeName}")"
+if [ "${init_result}" != "1" ]; then
+  echo "Initializing replica set ${rs_name} with member ${member_host}"
+  mongosh --quiet --host "${mongo_host}" --port "${mongo_port}" "${auth_args[@]}" --eval "rs.initiate({_id:'${rs_name}',members:[{_id:0,host:'${member_host}'}]})"
+fi
 
-sleep 15
-
-echo SETUP time now: `date +"%T" `
-mongo --host ${MONGODB}:27017 <<EOF
-   var cfg = {
-        "_id": "rs",
-        "version": 1,
-        "members": [
-            {
-                "_id": 0,
-                "host": "${MONGODB}:27017",
-                "priority": 1
-            }
-        ]
-    };
-    rs.initiate(cfg, { force: true });
-    rs.reconfig(cfg, { force: true });
-    db.getMongo().setReadPref('nearest');
-EOF
-
-echo "rs.isMaster()" > is_master_check
-is_master_result=`mongo --host ${MONGODB} < is_master_check`
-
-expected_result="\"ismaster\" : true"
-
-while true;
-do
-  if [ "${is_master_result/$expected_result}" = "$is_master_result" ] ; then
-    echo "Waiting for Mongod node to assume primary status..."
-    sleep 3
-    is_master_result=`mongo --host ${MONGODB} < is_master_check`
-    echo ${is_master_result}
-  else
-    echo "Mongod node is now primary"
-    break;
-  fi
+echo "Waiting for node to become primary..."
+until mongosh --quiet --host "${mongo_host}" --port "${mongo_port}" "${auth_args[@]}" --eval 'db.hello().isWritablePrimary ? 1 : 0' | grep -q 1; do
+  sleep 2
 done
 
-exec "$@"
+echo "Replica set is ready."
+if [ "$#" -eq 0 ]; then
+  exit 0
+fi
 
-ping 127.0.0.1 > /dev/null
+exec "$@"

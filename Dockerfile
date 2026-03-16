@@ -1,12 +1,12 @@
-#This will prepare a elasticsearch node with mongo-connector enabled
+# This image initializes a MongoDB replica set member.
 
-FROM mongo:3.0
-MAINTAINER yeasy@github
+FROM mongo:8.2
+LABEL maintainer="yeasy@github"
 
-ENV DEBIAN_FRONTEND noninteractive
-ENV TZ Asia/Shanghai
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=UTC
 
-COPY docker-entrypoint.sh /tmp/
+COPY docker-entrypoint.sh /tmp/docker-entrypoint.sh
+RUN chmod +x /tmp/docker-entrypoint.sh
 
-# Sample usage when no commands is given outside
 ENTRYPOINT ["/bin/bash", "/tmp/docker-entrypoint.sh"]
